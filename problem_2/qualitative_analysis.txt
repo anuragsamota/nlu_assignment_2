@@ -1,0 +1,26 @@
+RNN:
+The model manages to generate some convincing names such as "shobhit" , "shivangi" , "venkat" etc.
+
+But still some names are not good and unrealistic e.g. "kamom" , "hishi" , "teim"
+Some malformed endings and rare-letter noise exist.
+
+Overall: best balance of realism and diversity.
+
+
+
+
+BLSTM:
+
+This model shows very high novelity / diversity but it is the most terrible model when generating names.
+Names are not realistic at all.
+
+Also there are some artifacts
+Overall: diverse but weaker realism.
+
+
+
+RNN + Attention:
+
+Only manages to generate few names realistically e.g. shara , shiva , shana  , sita.
+Strong repetition of a few patterns (for example repeated “sur”/“sura”  and their variants).
+Overall: lower qualitative diversity despite acceptable diversity.
