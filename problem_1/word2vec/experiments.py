@@ -13,7 +13,7 @@ import torch
 BASE_PATH = "./word2vec"
 MODEL_SELECTION = "both"  # choose: cbow, sgns, both
 TOP_K = 5
-PRINT_DETAILED = True
+PRINT_DETAILED = False
 REPORT_OUTPUT = "./report_word2vec_experiments.md"
 
 QUERY_WORDS = ["research", "student", "phd", "exam"]
@@ -22,10 +22,6 @@ ANALOGY_TASKS = [
     ("computer", "science", "mechanical"),
     ("student", "campus", "faculty"),
 ]
-
-
-
-
 
 
 
@@ -126,7 +122,7 @@ def load_model_checkpoints(base_path, model_name):
 
     loaded = []
     for file_path in files:
-        state_dict = torch.load(file_path, map_location="cpu")
+        state_dict = torch.load(file_path, map_location="cpu", weights_only=True)
         matrix = get_embedding_matrix(model_name, state_dict)
         matrix = normalize_rows(matrix)
 
@@ -150,6 +146,45 @@ def load_model_checkpoints(base_path, model_name):
         )
 
     return loaded
+
+
+def print_student_embedding_cbow(base_path):
+    target_window = 5
+    target_dim = 300
+    target_neg = 10
+
+    model_subdir = "cbow"
+    files = discover_checkpoints(base_path, "CBOW")
+    if not files:
+        print("No CBOW checkpoints found for embedding print.")
+        return
+
+    selected = None
+    for file_path in files:
+        parsed = parse_hparams_from_filename("CBOW", file_path.name)
+        if (
+            parsed["window_size"] == target_window
+            and parsed["embedding_dim"] == target_dim
+            and parsed["negative_samples"] == target_neg
+        ):
+            selected = file_path
+            break
+
+    if selected is None:
+        print("No CBOW checkpoint found for window=5, dim=300, neg=10.")
+        return
+
+    word_to_index, _index_to_word = load_vocab(base_path, model_subdir)
+    if "student" not in word_to_index:
+        print("'student' not found in CBOW vocabulary.")
+        return
+
+    state_dict = torch.load(selected, map_location="cpu")
+    embeddings = state_dict["embedding.weight"]
+    vector = embeddings[word_to_index["student"]].tolist()
+    formatted = ", ".join([f"{v:.4f}" for v in vector])
+    print("\nCBOW 300-dim embedding (window=5, neg=10) for 'student':")
+    print(f"student - {formatted}")
 
 
 def get_top_neighbors(word, top_k, word_to_index, index_to_word, embeddings):
@@ -203,6 +238,8 @@ def evaluate_checkpoint(checkpoint):
     missing_queries = [word for word in QUERY_WORDS if word not in word_to_index]
     neighbor_top1_scores = []
     analogy_top1_scores = []
+    neighbors_by_query = {}
+    analogies_by_query = {}
 
     if PRINT_DETAILED:
         print("\n" + "=" * 72)
@@ -216,6 +253,7 @@ def evaluate_checkpoint(checkpoint):
 
     for word in QUERY_WORDS:
         neighbors = get_top_neighbors(word, TOP_K, word_to_index, index_to_word, embeddings)
+        neighbors_by_query[word] = neighbors
         if neighbors:
             neighbor_top1_scores.append(neighbors[0][1])
         if PRINT_DETAILED:
@@ -223,6 +261,7 @@ def evaluate_checkpoint(checkpoint):
 
     for word_a, word_b, word_c in ANALOGY_TASKS:
         answers = solve_analogy(word_a, word_b, word_c, TOP_K, word_to_index, index_to_word, embeddings)
+        analogies_by_query[(word_a, word_b, word_c)] = answers
         if answers:
             analogy_top1_scores.append(answers[0][1])
         if PRINT_DETAILED:
@@ -244,6 +283,8 @@ def evaluate_checkpoint(checkpoint):
         "mean_neighbor_top1": mean_neighbor,
         "mean_analogy_top1": mean_analogy,
         "missing_queries": ",".join(missing_queries) if missing_queries else "-",
+        "neighbors_by_query": neighbors_by_query,
+        "analogies_by_query": analogies_by_query,
     }
 
 
@@ -265,15 +306,23 @@ def print_summary_table(summary_rows):
     print("\nOverall Comparison")
     print("=" * 18)
     print(
-        "{:<6} {:<35} {:>5} {:>7} {:>7} {:>10} {:>10}".format(
-            "Model", "Checkpoint", "Dim", "Window", "Neg", "NN@1(avg)", "ANA@1(avg)"
+        "{:<6} {:<35} {:>5} {:>7} {:>7} {:>10} {:>10} {:>12}".format(
+            "Model",
+            "Checkpoint",
+            "Dim",
+            "Window",
+            "Neg",
+            "NN@1(avg)",
+            "ANA@1(avg)",
+            "Combined",
         )
     )
-    print("-" * 90)
+    print("-" * 112)
 
     for row in sorted(summary_rows, key=sort_summary_row):
+        combined = (row["mean_neighbor_top1"] + row["mean_analogy_top1"]) / 2
         print(
-            "{:<6} {:<35} {:>5} {:>7} {:>7} {:>10} {:>10}".format(
+            "{:<6} {:<35} {:>5} {:>7} {:>7} {:>10} {:>10} {:>12}".format(
                 row["model"],
                 row["checkpoint"][:35],
                 row["embedding_dim"],
@@ -281,6 +330,7 @@ def print_summary_table(summary_rows):
                 row["negative_samples"] if row["negative_samples"] is not None else "NA",
                 format_value(row["mean_neighbor_top1"]),
                 format_value(row["mean_analogy_top1"]),
+                format_value(combined),
             )
         )
 
@@ -294,18 +344,19 @@ def write_markdown_report(summary_rows, output_path):
     lines.append(f"- Query words: {', '.join(QUERY_WORDS)}")
     lines.append("- Analogy tasks: " + "; ".join([f"{a}:{b}:{c}" for a, b, c in ANALOGY_TASKS]))
     lines.append("")
-    lines.append("## Formal Comparison Table")
+    lines.append("## Best Checkpoints (Compact)")
     lines.append("")
     lines.append(
         "| Model | Checkpoint | Embedding Dim | Window Size | Negative Samples | "
-        "Vocab Size | Query Coverage | Mean Top-1 Neighbor Cosine | Mean Top-1 Analogy Cosine | Missing Query Words |"
+        "Vocab Size | Query Coverage | Mean Top-1 Neighbor Cosine | Mean Top-1 Analogy Cosine | Combined Score | Missing Query Words |"
     )
-    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---|")
+    lines.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|")
 
     for row in sorted(summary_rows, key=sort_summary_row):
         coverage = f"{row['queries_covered']}/{row['queries_total']}"
+        combined = (row["mean_neighbor_top1"] + row["mean_analogy_top1"]) / 2
         lines.append(
-            "| {model} | {checkpoint} | {dim} | {window} | {neg} | {vocab} | {coverage} | {neighbor} | {analogy} | {missing} |".format(
+            "| {model} | {checkpoint} | {dim} | {window} | {neg} | {vocab} | {coverage} | {neighbor} | {analogy} | {combined} | {missing} |".format(
                 model=row["model"],
                 checkpoint=row["checkpoint"],
                 dim=row["embedding_dim"],
@@ -315,19 +366,53 @@ def write_markdown_report(summary_rows, output_path):
                 coverage=coverage,
                 neighbor=format_value(row["mean_neighbor_top1"]),
                 analogy=format_value(row["mean_analogy_top1"]),
+                combined=format_value(combined),
                 missing=row["missing_queries"],
             )
         )
 
     lines.append("")
+    lines.append("## Task-3: Nearest Neighbors and Analogies")
+    lines.append("")
+
+    for row in sorted(summary_rows, key=sort_summary_row):
+        lines.append(f"### {row['model']} - {row['checkpoint']}")
+        lines.append("")
+        lines.append("**Top-5 Nearest Neighbors**")
+        lines.append("")
+        for query_word in QUERY_WORDS:
+            neighbors = row["neighbors_by_query"].get(query_word, [])
+            formatted = ", ".join([f"{tok} ({score:.4f})" for tok, score in neighbors]) or "No results"
+            lines.append(f"- {query_word}: {formatted}")
+        lines.append("")
+        lines.append("**Analogy Results**")
+        lines.append("")
+        for word_a, word_b, word_c in ANALOGY_TASKS:
+            answers = row["analogies_by_query"].get((word_a, word_b, word_c), [])
+            formatted = ", ".join([f"{tok} ({score:.4f})" for tok, score in answers]) or "No results"
+            lines.append(f"- {word_a}:{word_b}::{word_c}:? -> {formatted}")
+        lines.append("")
+
     lines.append("## Notes")
     lines.append("")
     lines.append("- Higher cosine values usually mean stronger semantic alignment.")
     lines.append("- NA means that setting was not found in file naming.")
+    lines.append("- Combined Score = (NN@1(avg) + ANA@1(avg)) / 2")
 
-    # os.makedirs(str(Path(output_path).parent), exist_ok=True)
-    # with open(output_path, "w", encoding="utf-8") as f:
-    #     f.write("\n".join(lines) + "\n")
+    os.makedirs(str(Path(output_path).parent), exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def print_best_analogies(summary_rows):
+    print("\nTask-3 Analogies (Best Models)")
+    print("=" * 31)
+    for row in summary_rows:
+        print(f"\n{row['model']} - {row['checkpoint']}")
+        for word_a, word_b, word_c in ANALOGY_TASKS:
+            answers = row["analogies_by_query"].get((word_a, word_b, word_c), [])
+            formatted = ", ".join([f"{tok} ({score:.4f})" for tok, score in answers]) or "No results"
+            print(f"{word_a}:{word_b}::{word_c}:? -> {formatted}")
 
 
 def get_selected_model_names():
@@ -362,8 +447,30 @@ def run():
     for checkpoint in all_checkpoints:
         summary_rows.append(evaluate_checkpoint(checkpoint))
 
-    print_summary_table(summary_rows)
-    write_markdown_report(summary_rows, REPORT_OUTPUT)
+    print_student_embedding_cbow(BASE_PATH)
+
+    best_by_model = {}
+    for row in summary_rows:
+        combined = (row["mean_neighbor_top1"] + row["mean_analogy_top1"]) / 2
+        current = best_by_model.get(row["model"])
+        if current is None:
+            best_by_model[row["model"]] = row
+            continue
+        current_combined = (current["mean_neighbor_top1"] + current["mean_analogy_top1"]) / 2
+        if combined > current_combined:
+            best_by_model[row["model"]] = row
+
+    best_overall = max(
+        summary_rows,
+        key=lambda r: (r["mean_neighbor_top1"] + r["mean_analogy_top1"]) / 2,
+    )
+
+    compact_rows = list(best_by_model.values())
+    compact_rows.append(best_overall)
+
+    print_summary_table(compact_rows)
+    print_best_analogies(compact_rows)
+    write_markdown_report(compact_rows, REPORT_OUTPUT)
     print(f"\nFormal report written to: {REPORT_OUTPUT}")
 
 

@@ -1,0 +1,11 @@
+CBOW
+
+It shows a smoother, more uniform spread of points. 
+Semantically related terms are grouped, but clusters are softer and less separated because CBOW averages context, which smooths distinctions between nearby words.
+
+
+
+SkipGram with Negetive Sampling
+
+It shows tighter local neighborhoods, especially for domain terms (e.g., department, engineering, technology, institute), indicating sharper semantic boundaries.
+Skip‑gram with negative sampling tends to emphasize specific co‑occurrences, producing more compact clusters.

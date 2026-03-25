@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 3) To train SkipGram model
    ```cmd
-   python3 ./word2vec/train_cbow.py
+   python3 ./word2vec/train_sgns.py
    ```
 ## How to infer trained models
 > **Note** : Please change the variable `cbow_model_path` to correct model path you want to infer. Models are saved in `./word2vec/cbow/models` and `./word2vec/sgns/models` based on model type.
@@ -56,3 +56,5 @@ pip install -r requirements.txt
    ```cmd
    python3 ./word2vec/experiments.py
    ```
+
+## How to generate visualizations for Task 4
