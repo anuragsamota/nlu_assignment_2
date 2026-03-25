@@ -246,6 +246,8 @@ def clean_text(raw_text: str, aggressive: bool = False) -> str:
     return cleaned
 
 
+
+# Additonal settings for cleaning logic
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Clean scrapped text into single-line cleaned text")
     parser.add_argument("--input", default="scrapped.txt", help="Input scraped text file (default: scrapped.txt)")

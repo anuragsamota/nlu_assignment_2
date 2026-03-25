@@ -200,6 +200,8 @@ def save_txt(records: Iterable[Dict[str, str]], output_path: Path) -> None:
             f.write("\n\n")
 
 
+
+# Arguments for different configurations of the crawler.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Simple link-following crawler that skips hard/soft 404 pages"
