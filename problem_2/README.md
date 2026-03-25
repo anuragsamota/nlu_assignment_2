@@ -7,13 +7,19 @@ In this problem we implement and compare character-level name generation models:
 
 > **Note**: Create a Python virtual environment and install packages.
 
+```cmd 
 python3 -m venv .venv
+```
 
 For Linux, activate virtual environment using:
+```cmd
 source ./.venv/bin/activate
+```
 
 Install packages using:
+```cmd
 pip install -r requirements.txt
+```
 
 ## Dataset
 Training names are stored in TrainingNames.txt.
@@ -43,14 +49,18 @@ This script evaluates all three models and computes:
 - Trainable parameter count
 - Hidden size, number of layers, and learning rate
 
-Generated outputs:
+## Generated outputs:
 - Evaluation summary CSV: ./evaluation_summary.csv
 - Sample files:
   - ./samples/rnn_samples.txt
   - ./samples/blstm_samples.txt
   - ./samples/rnn_attention_samples.txt
 
+## Task 3 Qualitative analysis
+My qualitative analysis for model results is saved in `qualitative_analysis.txt` file
+
 ## Notes
 - Training scripts automatically use GPU if available, else CPU.
 - Evaluation uses the trained checkpoints. Train models first before running evaluate.py.
 - Number of generated samples for evaluation can be changed in evaluate.py by editing NUM_SAMPLES.
+  

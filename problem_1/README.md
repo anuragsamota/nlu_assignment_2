@@ -58,3 +58,8 @@ pip install -r requirements.txt
    ```
 
 ## How to generate visualizations for Task 4
+1) Run `./word2vec/visualizations.py` file to visualize the vector embeddings
+   ```cmd
+   python3 ./word2vec/visualizations.py
+   ```
+2) A new folder will be created by name visualizations containing images for both cbow and skipgram embeddings PCA visualizaiton. If the folder is already there then files will be overwritten.
